@@ -1,11 +1,11 @@
 {
-  "name": "vendor_name/package_name",
-  "description": "description_text",
+  "name": "Mattie112/hosola-data-logger",
+  "description": "Hosola data logger",
   "minimum-stability": "stable",
   "license": "proprietary",
   "authors": [
     {
-      "name": "author's name",
+      "name": "Mattie112",
       "email": "email@example.com"
     }
   ],
@@ -15,5 +15,8 @@
         "src/"
       ]
     }
+  },
+  "require": {
+    "monolog/monolog": "^1.17"
   }
 }

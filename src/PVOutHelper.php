@@ -1,14 +1,12 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Matthijs
- * Date: 12-11-2015
- * Time: 19:39
- */
-
 namespace Inverter;
 
+use Monolog\Logger;
 
+/**
+ * Class PVOutHelper
+ * @package Inverter
+ */
 class PVOutHelper
   {
 
@@ -18,11 +16,11 @@ class PVOutHelper
    *
    * @param $settings
    * @param $data
+   * @param Logger $logger
    * @throws \Exception
    */
-  public static function sendToPVOut($settings, $data)
+  public static function sendToPVOutput($settings, $data, Logger $logger)
     {
-
     $http_request = new \HttpRequest($settings["pvout"]["url"], \HttpRequest::METH_POST);
     $headers["X-Pvoutput-Apikey"] = $settings["pvout"]["api_key"];
     $headers["X-Pvoutput-SystemId"] = $settings["pvout"]["system_id"];
@@ -30,11 +28,12 @@ class PVOutHelper
     $http_request->addPostFields($data);
     try
       {
-      $http_request->send()->getBody();
+      $output = $http_request->send()->getBody();
+      $logger->addInfo("Data send to pvoutput!", ["output" => $output]);
       }
     catch (\HttpException $e)
       {
-      throw new \Exception("Unable to connect to pvoutput: " . $e->getMessage());
+      $logger->addWarning("Unable to connect to pvoutput", ["error" => $e->getMessage()]);
       }
     }
   }

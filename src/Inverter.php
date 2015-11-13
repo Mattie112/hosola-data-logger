@@ -1,40 +1,34 @@
 <?php
 namespace Inverter;
 
+use Monolog\Logger;
+
 abstract class Inverter
   {
-  public $name = "inverter";
   public $ip;
   public $port;
   public $protocol = "tcp";
   public $serial;
+
+  /** @var  Logger */
+  protected $logger;
 
   protected $socket;
   protected $settings;
 
   /**
    * Inverter constructor.
-   *
-   * @param string $name
-   * @internal param $ip
-   * @internal param $port
-   * @internal param string $protocol
-   * @internal param $serial
+   * @param Logger $logger
    */
-  public function __construct($name)
+  public function __construct(Logger $logger)
     {
-    $this->name = $name;
-
-    $this->settings = parse_ini_file(__DIR__ . "/../config.ini");
-
-
+    $this->logger = $logger;
+    $this->settings = parse_ini_file(__DIR__ . "/../config.ini", true);
     }
-
 
   abstract function fetch();
 
   protected abstract function parseData($databuffer);
-
 
   /**
    * https://github.com/micromys/Omnik
@@ -94,22 +88,6 @@ abstract class Inverter
       $dec += ord(substr($str, $i, 1)) * pow(256, $i);    // take a byte, get ascii value, muliply by 256^(0,1,...n where n=length-1) and add to $dec
       }
     return $dec;                // return decimal
-    }
-
-  /**
-   * @return string
-   */
-  public function getName()
-    {
-    return $this->name;
-    }
-
-  /**
-   * @param string $name
-   */
-  public function setName($name)
-    {
-    $this->name = $name;
     }
 
   /**
@@ -175,6 +153,4 @@ abstract class Inverter
     {
     $this->serial = $serial;
     }
-
-
   }

@@ -1,100 +1,150 @@
 <?php
 namespace Inverter;
 
+use Monolog\Logger;
+use PDO;
+
+/**
+ * Class HosolaInverter
+ * @package Inverter
+ */
 class HosolaInverter extends Inverter
   {
-  /** @var  int */
-  public $timestamp;
-  /** @var  string */
-  public $datetime;
-  /** @var  string */
-  public $inverter_id;
-  /** @var  float */
-  public $temperature;
-  /** @var  float */
-  public $vpv;
-  /** @var  float */
-  public $ipv;
-  /** @var  float */
-  public $iac;
-  /** @var  float */
-  public $vac;
-  /** @var  float */
-  public $fac;
-  /** @var  float */
-  public $pac;
-  /** @var  float */
-  public $e_today;
-  /** @var  float */
-  public $e_total;
-  /** @var  float */
-  public $total_hours;
+  public $data = [];
+  private $base64_databuffer;
 
-  public function __construct($name)
+  /** Mapping to what fields exists in the databuffer */
+  const MAPPIGNG = [
+      ["field" => "header", "offset" => 0, "length" => 4, "devider" => 1],
+      ["field" => "generated_id_1", "offset" => 4, "length" => 4, "devider" => 1],
+      ["field" => "generated_id_2", "offset" => 8, "length" => 4, "devider" => 1],
+      ["field" => "unk_1", "offset" => 12, "length" => 4, "devider" => 1],
+      ["field" => "inverter_id", "offset" => 15, "length" => 16, "devider" => 1],
+      ["field" => "temperature", "offset" => 31, "length" => 2, "devider" => 10],
+      ["field" => "vpv1", "offset" => 33, "length" => 2, "devider" => 10],
+      ["field" => "vpv2", "offset" => 35, "length" => 2, "devider" => 10],
+      ["field" => "vpv3", "offset" => 37, "length" => 2, "devider" => 10],
+      ["field" => "ipv1", "offset" => 39, "length" => 2, "devider" => 10],
+      ["field" => "ipv2", "offset" => 41, "length" => 2, "devider" => 10],
+      ["field" => "ipv3", "offset" => 43, "length" => 2, "devider" => 10],
+      ["field" => "iac1", "offset" => 45, "length" => 2, "devider" => 10],
+      ["field" => "iac2", "offset" => 47, "length" => 2, "devider" => 10],
+      ["field" => "iac3", "offset" => 49, "length" => 2, "devider" => 10],
+      ["field" => "vac1", "offset" => 51, "length" => 2, "devider" => 10],
+      ["field" => "vac2", "offset" => 53, "length" => 2, "devider" => 10],
+      ["field" => "vac3", "offset" => 55, "length" => 2, "devider" => 10],
+      ["field" => "fac1", "offset" => 57, "length" => 2, "devider" => 100],
+      ["field" => "pac1", "offset" => 59, "length" => 2, "devider" => 1],
+      ["field" => "fac2", "offset" => 62, "length" => 2, "devider" => 100],
+      ["field" => "pac2", "offset" => 63, "length" => 2, "devider" => 1],
+      ["field" => "fac3", "offset" => 65, "length" => 2, "devider" => 100],
+      ["field" => "pac3", "offset" => 67, "length" => 2, "devider" => 1],
+      ["field" => "etoday", "offset" => 69, "length" => 2, "devider" => 100],
+      ["field" => "etotal", "offset" => 71, "length" => 4, "devider" => 10],
+      ["field" => "htotal", "offset" => 75, "length" => 4, "devider" => 1],
+      ["field" => "unk_2", "offset" => 79, "length" => 20, "devider" => 1],
+  ];
+
+  /**
+   * HosolaInverter constructor.
+   * @param Logger $logger
+   */
+  public function __construct(Logger $logger)
     {
-    parent::__construct($name);
-
+    parent::__construct($logger);
     $this->ip = $this->settings["hosola-inverter"]["ip"];
     $this->port = $this->settings["hosola-inverter"]["port"];
     $this->protocol = $this->settings["hosola-inverter"]["protocol"];
     $this->serial = $this->settings["hosola-inverter"]["serial"];
     //todo verify above info
+
+    $this->logger->addInfo("HosolaInverter object created", ["IP" => $this->ip, "port" => $this->port, "protocol" => $this->protocol, "serial" => $this->serial]);
     }
 
-
+  /**
+   * Method to fetch live data from the Inverter
+   */
   public function fetch()
     {
+    $this->logger->addInfo("Trying to fetch data", ["ip" => $this->ip, "port" => $this->port]);
+
     $error_code = null;
     $error_string = null;
-    $this->socket = @stream_socket_client($this->protocol."://" . $this->ip . ":" . $this->port, $error_code, $error_string, 3);
 
-    if ($this->socket === false)
+    if(isset($this->settings["hosola-inverter"]["simulate"]) && $this->settings["hosola-inverter"]["simulate"])
+      $this->socket = true;
+    else
+      $this->socket = @stream_socket_client($this->protocol . "://" . $this->ip . ":" . $this->port, $error_code, $error_string, 3);
+
+    if($this->socket === false)
       {
-      throw new \Exception("Unable to create socket");
+      $this->logger->addError("Unable to create connection to device", ["ip" => $this->ip, "port" => $this->port]);
+      die();
       }
     else
       {
-      $databuffer = '';
       // (binary) read data buffer (expected 99 bytes), do not use fgets()
-      $databuffer = @fread($this->socket, 128);
-      if ($databuffer !== false)
+      if(isset($this->settings["hosola-inverter"]["simulate"]) && $this->settings["hosola-inverter"]["simulate"])
+        $databuffer = base64_decode("aHNBsBV3jCQVd4wkgQETSDcwMTVEWFhYWAAAAAAAAACxC70KgQAAAAMABAAAAAkAAAAACRQAAAAAE4oAowAAAAAAAAAAAAMAAABLAAAAFwABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVjEuMTBWMS4xMJE==");
+      else
+        $databuffer = @fread($this->socket, 128);
+
+      if($databuffer !== false)
         {
-        // get bytes received length
+        // Get bytes received length
         $bytesreceived = strlen($databuffer);
-        // if enough data is returned
-        if ($bytesreceived > 90)
+        // If enough data is returned
+        if($bytesreceived > 90)
           {
           // We have the correct data, now put this in the correct fields
+          // Store for future reference
+          $this->base64_databuffer = base64_encode($databuffer);
           $this->parseData($databuffer);
           }
         else
           {
           fclose($this->socket);
-          throw new \Exception("Incorrect data length, expected 99 bytes but received " . $bytesreceived);
+          $this->logger->addError("Incorrect data length, expected 99 bytes but received", ["bytes" => $bytesreceived, "data_received" => base64_encode($databuffer)]);
+          die();
           }
         }
       else
         {
         fclose($this->socket);
+        $this->logger->addError("No data received from devide");
+        die();
         }
       }
     }
 
   protected function parseData($databuffer)
     {
-    $this->timestamp = time(); // todo can we get this from inverter?
-    $this->datetime = date('Y-m-d H:i:s', $this->timestamp);
+    $this->logger->addInfo("Starting to parse the received data");
+    // The inverter ID is already in plain text
+    $this->data["inverter"] = substr($databuffer, 15, 10);
+    // We do not get the time from the inverter so we use our own
+    $this->data["timestamp"] = time();
+    $this->data["datetime"] = date('Y-m-d H:i:s', $this->data["timestamp"]);
 
-    $this->setTemperature($this->getShort($databuffer, 31, 10));
-    $this->setVpv($this->getShort($databuffer, 33, 10, 3));
-    $this->setIpv($this->getShort($databuffer, 39, 10, 3));
-    $this->setIac($this->getShort($databuffer, 45, 10, 3));
-    $this->setVac($this->getShort($databuffer, 51, 10, 3));
-    $this->setFac($this->getShort($databuffer, 57, 100, 3, 4));
-    $this->setPac($this->getShort($databuffer, 59, 1, 3, 4));
-    $this->setEToday($this->getShort($databuffer, 69, 100));
-    $this->setETotal($this->getLong($databuffer, 71, 1));
-    $this->setTotalHours($this->getLong($databuffer, 75, 1));
+    // Now loop throug our mapping to get the correct values
+    foreach(self::MAPPIGNG as $key => $element)
+      {
+      $value = null;
+
+      if($element["length"] > 2)
+        {
+        $value = $this->getLong($databuffer, $element["offset"], $element["devider"]);
+        }
+      else
+        {
+        $value = $this->getShort($databuffer, $element["offset"], $element["devider"]);
+        }
+
+      $this->data[$element["field"]] = $value;
+      }
+
+    $this->logger->addInfo("Data from device sucessfully parsed", [$this->data]);
+    return true;
     }
 
   /**
@@ -102,253 +152,96 @@ class HosolaInverter extends Inverter
    */
   public function toPVOutput()
     {
+    if(!$this->settings["pvoutput"]["enabled"])
+      return;
+
+    $this->logger->addInfo("Compiling data for PVOutput");
+
     $data = [];
-    $data["d"] = date("yyyymmdd", $this->getTimestamp());
-    $data["t"] = date("hh:mm", $this->getTimestamp());
-    $data["v1"] = $this->getEToday();
-    $data["v2"] = $this->getPac();
-    $data["v5"] = $this->getTemperature();
-    $data["v6"] = $this->getVpv();
+    $data["d"] = date("Ymd", $this->getElement("timestamp")); //yyyymmdd
+    $data["t"] = date("H:i", $this->getElement("timestamp")); //hh:mm
+    $data["v1"] = $this->getElement("etoday");
+    $data["v2"] = $this->getElement("pac1");
+    $data["v5"] = $this->getElement("temperature");
+    $data["v6"] = $this->getElement("vpv1");
 
-    var_dump($data);
-
-//    PVOutHelper::sendToPVOut($this->settings, $data);
+    PVOutHelper::sendToPVOutput($this->settings, $data, $this->logger);
     }
 
 
+  /**
+   * Function to write Hosola inverter specific data to a mysql table
+   */
   public function toMySQL()
     {
-    $pdo = new \PDO("mysql:" . $this->settings["mysql"]["host"] . ";dbname=" . $this->settings["mysql"]["database"], $this->settings["mysql"]["user"], $this->settings["mysql"]["password"]);
+    if(!$this->settings["mysql"]["enabled"])
+      return;
 
-    $sql = "INSERT INTO " . $this->settings["mysql"]["table"] . "
-    (timestamp, etoday)
-    VALUES(
-    :timestamp,
-    :etoday
-    )";
+    $this->logger->addInfo("Compiling data for MySQL");
 
-    $sth = $pdo->prepare($sql);
-    $sth->bindValue(":timestamp", $this->getTimestamp());
-    $sth->bindValue(":etodaty", $this->getEToday());
+    // Create the PDO connection
+    $mysql_string = "mysql:host=" . $this->settings["mysql"]["host"] . ";port=3306;dbname=" . $this->settings["mysql"]["database"];
 
-    $sth->execute();
+    try
+      {
+      $pdo = new \PDO($mysql_string, $this->settings["mysql"]["user"], $this->settings["mysql"]["password"]);
+      $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      }
+    catch(\PDOException $e)
+      {
+      $this->logger->addWarning("Unable to send data to MySQL server", ["error" => $e->getMessage(), "host" => $this->settings["mysql"]["host"]]);
+      }
+
+    if(!isset($pdo))
+      return;
+
+    // Build the SQL
+    $sql = "INSERT INTO " . $this->settings["mysql"]["table"];
+    $sql .= " (";
+    $columns = join(",", array_column(self::MAPPIGNG, "field"));
+    // Values not in the mapping
+    $columns .= ",inverter,timestamp,raw_data_string_base64";
+    $sql .= $columns . ")";
+
+    // Now get all the values to insert
+    $values = " VALUES(";
+    foreach(self::MAPPIGNG as $key => $element)
+      {
+      $values .= "'" . $this->data[$element["field"]] . "',";
+      }
+    // And now the values that have no mapping
+    $values .= "'" . $this->data["inverter"] . "'," . $this->data["timestamp"] . ",'" . $this->base64_databuffer . "');";
+
+    // Merge the stuff together
+    $sql .= $values;
+
+    try
+      {
+      // Execute it
+      $pdo->exec($sql);
+      }
+    catch(\PDOException $e)
+      {
+      $this->logger->addWarning("Unable to send data to MySQL", ["error" => $e->getMessage()]);
+      }
     }
 
   /**
-   * @return string Returns all object vars as a JSON encoded string
+   * Returns the value of a given element
+   *
+   * @param $element
+   * @return mixed
+   */
+  public function getElement($element)
+    {
+    return $this->data[$element];
+    }
+
+  /**
+   * @return string Returns all data as a JSON encoded string
    */
   public function getJSON()
     {
-    return json_encode(get_object_vars($this));
+    return json_encode($this->data);
     }
-
-  /**
-   * @return int
-   */
-  public function getTimestamp()
-    {
-    return $this->timestamp;
-    }
-
-  /**
-   * @param int $timestamp
-   */
-  public function setTimestamp($timestamp)
-    {
-    $this->timestamp = $timestamp;
-    }
-
-  /**
-   * @return string
-   */
-  public function getDatetime()
-    {
-    return $this->datetime;
-    }
-
-  /**
-   * @param string $datetime
-   */
-  public function setDatetime($datetime)
-    {
-    $this->datetime = $datetime;
-    }
-
-  /**
-   * @return string
-   */
-  public function getInverterId()
-    {
-    return $this->inverter_id;
-    }
-
-  /**
-   * @param string $inverter_id
-   */
-  public function setInverterId($inverter_id)
-    {
-    $this->inverter_id = $inverter_id;
-    }
-
-  /**
-   * @return float
-   */
-  public function getTemperature()
-    {
-    return $this->temperature;
-    }
-
-  /**
-   * @param float $temperature
-   */
-  public function setTemperature($temperature)
-    {
-    $this->temperature = $temperature;
-    }
-
-  /**
-   * @return float
-   */
-  public function getVpv()
-    {
-    return $this->vpv;
-    }
-
-  /**
-   * @param float $vpv
-   */
-  public function setVpv($vpv)
-    {
-    $this->vpv = $vpv;
-    }
-
-  /**
-   * @return float
-   */
-  public function getIpv()
-    {
-    return $this->ipv;
-    }
-
-  /**
-   * @param float $ipv
-   */
-  public function setIpv($ipv)
-    {
-    $this->ipv = $ipv;
-    }
-
-  /**
-   * @return float
-   */
-  public function getIac()
-    {
-    return $this->iac;
-    }
-
-  /**
-   * @param float $iac
-   */
-  public function setIac($iac)
-    {
-    $this->iac = $iac;
-    }
-
-  /**
-   * @return float
-   */
-  public function getFac()
-    {
-    return $this->fac;
-    }
-
-  /**
-   * @param float $fac
-   */
-  public function setFac($fac)
-    {
-    $this->fac = $fac;
-    }
-
-  /**
-   * @return float
-   */
-  public function getPac()
-    {
-    return $this->pac;
-    }
-
-  /**
-   * @param float $pac
-   */
-  public function setPac($pac)
-    {
-    $this->pac = $pac;
-    }
-
-  /**
-   * @return float
-   */
-  public function getEToday()
-    {
-    return $this->e_today;
-    }
-
-  /**
-   * @param float $e_today
-   */
-  public function setEToday($e_today)
-    {
-    $this->e_today = $e_today;
-    }
-
-  /**
-   * @return float
-   */
-  public function getETotal()
-    {
-    return $this->e_total;
-    }
-
-  /**
-   * @param float $e_total
-   */
-  public function setETotal($e_total)
-    {
-    $this->e_total = $e_total;
-    }
-
-  /**
-   * @return float
-   */
-  public function getTotalHours()
-    {
-    return $this->total_hours;
-    }
-
-  /**
-   * @param float $total_hours
-   */
-  public function setTotalHours($total_hours)
-    {
-    $this->total_hours = $total_hours;
-    }
-
-  /**
-   * @return float
-   */
-  public function getVac()
-    {
-    return $this->vac;
-    }
-
-  /**
-   * @param float $vac
-   */
-  public function setVac($vac)
-    {
-    $this->vac = $vac;
-    }
-
-
   }
