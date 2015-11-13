@@ -12,6 +12,7 @@ Hosola-data-logger is a small PHP script to fetch, parse and upload data from yo
 * Install php (sudo apt-get install php5-cli for example)
 * Install composer (see https://getcomposer.org/download/)
 * Git clone the source with `git clone https://github.com/Mattie112/hosola-data-logger.git`
+* Execute a `composer install` to fetch dependencies
 * Copy the example.ini to config.ini and edit this file
 * Checkout the "example.php" and "export_data.php" file to get you started!
 * If you want to use MySQL don't forget to import the SQL file
