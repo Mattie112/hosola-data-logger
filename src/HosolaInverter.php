@@ -206,10 +206,10 @@ class HosolaInverter extends Inverter
     $data = [];
     $data["d"] = date("Ymd", $this->getElement("timestamp")); //yyyymmdd
     $data["t"] = date("H:i", $this->getElement("timestamp")); //hh:mm
-    $data["v1"] = $this->getElement("etoday");
-    $data["v2"] = $this->getElement("pac1");
-    $data["v5"] = $this->getElement("temperature");
-    $data["v6"] = $this->getElement("vpv1");
+    $data["v1"] = $this->getElement("etoday") * 1000; // watt hours
+    $data["v2"] = $this->getElement("pac1"); // watt
+    $data["v5"] = $this->getElement("temperature"); // degrees
+    $data["v6"] = $this->getElement("vpv1");  // voltage
 
     PVOutHelper::sendToPVOutput($this->settings, $data, $this->logger);
     }
