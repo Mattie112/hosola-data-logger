@@ -244,7 +244,12 @@ class HosolaInverter extends Inverter
     // Build the SQL
     $sql = "INSERT INTO " . $this->settings["mysql"]["table"];
     $sql .= " (";
-    $columns = join(",", array_column(self::$MAPPIGNG, "field"));
+
+    // Be compatible with php 5.4 that has no array_column
+    //    $columns = join(",", array_column(self::$MAPPIGNG, "field"));
+    $column_name = "field";
+    $columns = join(",", array_map(function($element) use($column_name){return $element[$column_name];}, self::$MAPPIGNG));
+
     // Values not in the mapping
     $columns .= ",inverter,timestamp,raw_data_string_base64";
     $sql .= $columns . ")";
