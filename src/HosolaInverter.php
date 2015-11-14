@@ -58,7 +58,40 @@ class HosolaInverter extends Inverter
     $this->serial = $this->settings["hosola-inverter"]["serial"];
     //todo verify above info
 
+    $this->inverter_id = $this->calculateIDString($this->serial);
+
     $this->logger->addInfo("HosolaInverter object created", ["IP" => $this->ip, "port" => $this->port, "protocol" => $this->protocol, "serial" => $this->serial]);
+    }
+
+  /**
+   *  Build inverter identification string to be sent to the inverter
+   * the identification string is build from several parts.
+   * a. The first part is a fixed 4 char string: 0x68024030;
+   * b. the second part is the reversed hex notation of the s/n twice;
+   * c. then again a fixed string of two chars : 0x0100;
+   * d. a checksum of the double s/n with an offset;
+   * e. and finally a fixed ending char : 0x16;
+   * Code snippet from: https://github.com/micromys/Omnik
+   *
+   * @param $serial
+   * @return string
+   */
+  private function calculateIDString($serial)
+    {
+    $hexsn = dechex($serial);          // convert serialnumber to hex
+    $cs = 115;                    // offset, not found any explanation sofar for this offset
+    $tmpStr = '';
+
+    for($i = strlen($hexsn); $i > 0; $i -= 2)              // in reverse order of serial; 11223344 => 44332211 and calculate checksum
+      {
+      $tmpStr .= substr($hexsn, $i - 2, 2);          // create reversed string byte for byte
+      $cs += 2 * ord($this->hex2str(substr($hexsn, $i - 2, 2)));  // multiply by 2 because of rule b and d
+      }
+
+    $checksum = $this->hex2str(substr(dechex($cs), -2));    // convert checksum and take last byte
+
+    // now glue all parts together : fixed part (a) + s/n twice (b) + fixed string (c) + checksum (d) + fixend ending char
+    return "\x68\x02\x40\x30" . $this->hex2str($tmpStr . $tmpStr) . "\x01\x00" . $checksum . "\x16";  // create inverter ID string
     }
 
   /**
@@ -83,11 +116,24 @@ class HosolaInverter extends Inverter
       }
     else
       {
-      // (binary) read data buffer (expected 99 bytes), do not use fgets()
+      // Some dummy data
       if(isset($this->settings["hosola-inverter"]["simulate"]) && $this->settings["hosola-inverter"]["simulate"])
         $databuffer = base64_decode("aHNBsBV3jCQVd4wkgQETSDcwMTVEWFhYWAAAAAAAAACxC70KgQAAAAMABAAAAAkAAAAACRQAAAAAE4oAowAAAAAAAAAAAAMAAABLAAAAFwABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVjEuMTBWMS4xMJE==");
       else
+        {
+        // Before we can read the data we'll need to send the inverter ID
+
+        $bytessent = fwrite($this->socket, $this->inverter_id, strlen($this->inverter_id));
+
+        if($bytessent === false)
+          {
+          $this->logger->addError("Unable to send identification to the inverter", ["inverter_id" => $this->inverter_id]);
+          die();
+          }
+
+        // Now we can read the data buffer (expected 99 bytes), do not use fgets()
         $databuffer = @fread($this->socket, 128);
+        }
 
       if($databuffer !== false)
         {

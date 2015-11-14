@@ -21,17 +21,26 @@ class PVOutHelper
    */
   public static function sendToPVOutput($settings, $data, Logger $logger)
     {
-    $http_request = new \HttpRequest($settings["pvout"]["url"], \HttpRequest::METH_POST);
-    $headers["X-Pvoutput-Apikey"] = $settings["pvout"]["api_key"];
-    $headers["X-Pvoutput-SystemId"] = $settings["pvout"]["system_id"];
-    $http_request->setHeaders($headers);
-    $http_request->addPostFields($data);
+    $headers = "Content-type: application/x-www-form-urlencoded\r\n";
+    $headers .= "X-Pvoutput-Apikey: ".$settings["pvoutput"]["api_key"]."\r\n";
+    $headers .= "X-Pvoutput-SystemId: ".$settings["pvoutput"]["system_id"]."\r\n";
+
+    $options = [
+        "http" => [
+            "header" => $headers,
+            "method" => "POST",
+            "content" => http_build_query($data)
+        ]
+    ];
+
     try
       {
-      $output = $http_request->send()->getBody();
+      $context = stream_context_create($options);
+      $output = file_get_contents($settings["pvoutput"]["url"], false, $context);
+
       $logger->addInfo("Data send to pvoutput!", ["output" => $output]);
       }
-    catch (\HttpException $e)
+    catch(\HttpException $e)
       {
       $logger->addWarning("Unable to connect to pvoutput", ["error" => $e->getMessage()]);
       }

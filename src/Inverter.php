@@ -91,6 +91,22 @@ abstract class Inverter
     }
 
   /**
+   * https://github.com/micromys/Omnik
+   *
+   * @param $hex
+   * @return string
+   */
+  function hex2str($hex)              // convert readable hexstring to chracter string i.e. "41424344" => "ABCD"
+    {
+    $string = '';                  // init
+    for ($i = 0; $i < strlen($hex) - 1; $i += 2)        // process each pair of bytes
+      {
+      $string .= chr(hexdec($hex[$i] . $hex[$i + 1]));  // pick 2 bytes, convert via hexdec to chr
+      }
+    return $string;                // return string
+    }
+
+  /**
    * @return mixed
    */
   public function getIp()
