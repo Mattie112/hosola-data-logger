@@ -14,7 +14,7 @@ class HosolaInverter extends Inverter
   private $base64_databuffer;
 
   /** Mapping to what fields exists in the databuffer */
-  const MAPPIGNG = [
+  private static $MAPPIGNG = [
       ["field" => "header", "offset" => 0, "length" => 4, "devider" => 1],
       ["field" => "generated_id_1", "offset" => 4, "length" => 4, "devider" => 1],
       ["field" => "generated_id_2", "offset" => 8, "length" => 4, "devider" => 1],
@@ -127,7 +127,7 @@ class HosolaInverter extends Inverter
     $this->data["datetime"] = date('Y-m-d H:i:s', $this->data["timestamp"]);
 
     // Now loop throug our mapping to get the correct values
-    foreach(self::MAPPIGNG as $key => $element)
+    foreach(self::$MAPPIGNG as $key => $element)
       {
       $value = null;
 
@@ -198,14 +198,14 @@ class HosolaInverter extends Inverter
     // Build the SQL
     $sql = "INSERT INTO " . $this->settings["mysql"]["table"];
     $sql .= " (";
-    $columns = join(",", array_column(self::MAPPIGNG, "field"));
+    $columns = join(",", array_column(self::$MAPPIGNG, "field"));
     // Values not in the mapping
     $columns .= ",inverter,timestamp,raw_data_string_base64";
     $sql .= $columns . ")";
 
     // Now get all the values to insert
     $values = " VALUES(";
-    foreach(self::MAPPIGNG as $key => $element)
+    foreach(self::$MAPPIGNG as $key => $element)
       {
       $values .= "'" . $this->data[$element["field"]] . "',";
       }
