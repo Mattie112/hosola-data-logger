@@ -211,6 +211,8 @@ class HosolaInverter extends Inverter
     $data["v5"] = $this->getElement("temperature"); // degrees
     $data["v6"] = $this->getElement("vpv1");  // voltage
 
+    $this->logger->addInfo("Sending data to PVOutput", ["data" => $data]);
+
     PVOutHelper::sendToPVOutput($this->settings, $data, $this->logger);
     }
 
@@ -269,6 +271,7 @@ class HosolaInverter extends Inverter
     try
       {
       // Execute it
+      $this->logger->addInfo("Inserting values into MySQL", ["values" => $values]);
       $pdo->exec($sql);
       }
     catch(\PDOException $e)
