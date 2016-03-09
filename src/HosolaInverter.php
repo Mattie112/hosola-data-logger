@@ -64,7 +64,7 @@ class HosolaInverter extends Inverter
     }
 
   /**
-   *  Build inverter identification string to be sent to the inverter
+   * Build inverter identification string to be sent to the inverter
    * the identification string is build from several parts.
    * a. The first part is a fixed 4 char string: 0x68024030;
    * b. the second part is the reversed hex notation of the s/n twice;
@@ -73,10 +73,12 @@ class HosolaInverter extends Inverter
    * e. and finally a fixed ending char : 0x16;
    * Code snippet from: https://github.com/micromys/Omnik
    *
+   * TODO rewrite method to more clearly explain what is happening
+   *
    * @param $serial
    * @return string
    */
-  private function calculateIDString($serial)
+  public function calculateIDString($serial)
     {
     $hexsn = dechex($serial);          // convert serialnumber to hex
     $cs = 115;                    // offset, not found any explanation sofar for this offset
