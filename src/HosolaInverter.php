@@ -210,8 +210,21 @@ class HosolaInverter extends Inverter
     $data["t"] = date("H:i", $this->getElement("timestamp")); //hh:mm
     $data["v1"] = $this->getElement("etoday") * 1000; // watt hours
     $data["v2"] = $this->getElement("pac1"); // watt
-    $data["v5"] = $this->getElement("temperature"); // degrees
     $data["v6"] = $this->getElement("vpv1");  // voltage
+
+    if(isset($this->settings["pvoutput"]["inverter_temperature"]) && $this->settings["pvoutput"]["inverter_temperature"])
+      $data["v5"] = $this->getElement("temperature"); // degrees
+
+    // If we can use extended data parse it here
+    if(isset($this->settings["pvoutput-extended"]["extended_enabled"]) && $this->settings["pvoutput-extended"]["extended_enabled"])
+      {
+      // We can have extended param v7, v8, v9, v10, v11 and v12
+      for($i = 7; $i <= 12; $i++)
+        {
+        if(isset($this->settings["pvoutput-extended"]["v" . $i]) && $this->settings["pvoutput-extended"]["v" . $i])
+          $data["v" . $i] = $this->getElement($this->settings["pvoutput-extended"]["v" . $i]);
+        }
+      }
 
     $this->logger->addInfo("Sending data to PVOutput", ["data" => $data]);
 
@@ -252,7 +265,10 @@ class HosolaInverter extends Inverter
     // Be compatible with php 5.4 that has no array_column
     //    $columns = join(",", array_column(self::$MAPPIGNG, "field"));
     $column_name = "field";
-    $columns = join(",", array_map(function($element) use($column_name){return $element[$column_name];}, self::$MAPPIGNG));
+    $columns = join(",", array_map(function ($element) use ($column_name)
+      {
+      return $element[$column_name];
+      }, self::$MAPPIGNG));
 
     // Values not in the mapping
     $columns .= ",inverter,timestamp,raw_data_string_base64";
